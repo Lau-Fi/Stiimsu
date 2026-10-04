@@ -3,10 +3,12 @@
 # Stiimsu
 A SteamOS-Android bridge for running iisu and playing through linux-native emulators.
 
-# iisu-bridge — Full Setup Guide (Steam Deck / SteamOS)
+# iisu-bridge — Full Setup Guide (Linux)
 
-Run the **iiSU** Android game frontend on your Steam Deck, but have every game
-launch a **native SteamOS emulator** e.g PCSX2, Dolphin, RPCS3, RetroArch etc 
+[Original Steamguide here](https://github.com/bluefinhomeserver/Stiimsu-rewrites/blob/main/iiSU%20SteamOS.md)
+
+Run the **iiSU** Gaming frontend on your Linux Operating System, but have every game
+launch a **Linux native emulator** e.g PCSX2, Dolphin, RPCS3, RetroArch etc 
 instead of inside waydroid/android emulation.
 
 How it works: 
@@ -14,7 +16,7 @@ How it works:
 container).
 - When you press play, a tiny **stub APK** impersonating the Android
 emulator catches the launch, and sends the game's path to a small **daemon**
-on the SteamOS side, which translates the path and starts your native
+on the Linux side, which translates the path and starts your native
 emulator.
 - A control-panel web app, **Stiimsu Helper**, manages all of it.
 
@@ -61,27 +63,33 @@ Supported consoles:
 * Xbox
 * Xbox 360
 * RetroArch as a multi-system emulator
-* I could not get PS Vita Emulation to work, sorry... 
 
 ---
 
-## 1. Prepare SteamOS
+## 1. Install Waydroid
 
-Everything happens in **Desktop Mode** (Steam button → Power → Switch to
-Desktop). Open the **Konsole** terminal for the commands below.
+Waydroid is the Android container that hosts iiSU.
 
-If you have never set a password for the `deck` user, please do it as several
-steps need `sudo`:
+You can install Waydroid from your package manager.
+
+for example
+
+Arch based:
 
 ```bash
-passwd
+pacman -S Waydroid
+
+paru -S Waydroid
 ```
+etc.
 
-## 2. Install Waydroid
+Ubuntu/Debian:
+```bash
+sudo apt install Waydroid
+```
+etc.
 
-Waydroid is the Android container that hosts iiSU. On SteamOS the reliable
-route is the community **SteamOS Waydroid Installer** (search GitHub for
-`SteamOS-Waydroid-Installer` by ryanrudolfoba). However you can also build Waydroid yourself which may be reccomended. Please read **WAYDROID-STEAMOS-GUIDE.md** to learn how to do that yourself.
+However you can also build Waydroid yourself which may be reccomended. Please read **WAYDROID-STEAMOS-GUIDE.md** to learn how to do that yourself.
 
 Sanity check when done:
 
@@ -90,7 +98,11 @@ waydroid status        # should say the session is RUNNING while Waydroid is ope
 ls ~/.local/share/waydroid/data/media/0/    # Android's /sdcard, on the host side
 ```
 
-## 3. Install iiSU into Waydroid
+FOR ANY FURTHER INSTRUCTIONS ON USING WAYDROID, INSTALLATION AND FIXING ISSUES. 
+
+PLEASE CONSULT THE > [WAYDROID DOCUMENTATION](https://docs.waydro.id/) <
+
+## 2. Install iiSU into Waydroid
 
 Get the iiSU APK from the iiSU project, then (with the Waydroid session
 running):
@@ -108,14 +120,16 @@ sudo waydroid shell -- appops set com.iisulauncher MANAGE_EXTERNAL_STORAGE allow
 
 Open iiSU once from Waydroid to confirm it runs.
 
-(If you want **Fullscreen** KDE can force it permanently via a window rule: 
-with iiSU open, right-click its title bar → More Actions → Configure Special Window Settings → 
-Add Property → Fullscreen → set to Apply Initially → in the same dialog make sure the 
-window match is on the window class (waydroid), not the exact title → OK. 
-Every Waydroid window from then on opens fullscreen. 
-Apply Initially still lets you un-fullscreen with the same menu if you ever need the desktop.)
+Waydroid Fulscreen KDE
 
-## 4. Create the ROM library (one-time)
+Waydroid Fulscreen
+
+```bash
+waydroid prop set persist.waydroid.width <Monitor_width> waydroid prop set persist.waydroid.height <Monitor_height> waydroid session stop #relaunch waydroid
+sudo waydroid shell wm size #shows current waydroid size
+```
+
+## 3. Create the ROM library (one-time)
 
 Games live inside Waydroid's shared storage so both worlds can see them:
 `~/.local/share/waydroid/data/media/0/roms/<console>/`. That tree is
@@ -123,41 +137,61 @@ root-owned by Android, so hand yourself the `roms` part once:
 
 ```bash
 sudo mkdir -p ~/.local/share/waydroid/data/media/0/roms
-sudo chown -R deck:deck ~/.local/share/waydroid/data/media/0/roms
+sudo chown -R <user>:<user> ~/.local/share/waydroid/data/media/0/roms
 sudo chmod a+rX ~/.local/share/waydroid/data/media/0/roms
 ```
+
+(REPLACE `<user>` with your linux user)
 
 After this, the Stiimsu Helper's **Add a game** screen can create per-console
 subfolders and copies files for you into the`/roms` folder.
 
-## 5. Allow the bridge its two privileged actions
+## 4. Allow the bridge its two privileged actions
 
 The daemon needs passwordless rights for exactly two things:
 - Driving Waydroid (stop/relaunch iiSU during game boot and close)
 - Re-opening the traversal permission Android relocks on the media folders at every boot.
 
-Create the sudoers file with the the `zz-` prefix matters (sudoers files are read alphabetically and the last
+The commands run in this step create the sudoers file with the the `zz-` prefix matters (sudoers files are read alphabetically and the last
 match wins, so this must sort after SteamOS's own files):
+
+Bash (works on most normal setups) :
 
 ```bash
 sudo tee /etc/sudoers.d/zz-iisu-bridge > /dev/null << 'EOF'
-deck ALL=(root) NOPASSWD: /usr/bin/waydroid
-deck ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/deck/.local/share/waydroid/data
-deck ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/deck/.local/share/waydroid/data/media
-deck ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/deck/.local/share/waydroid/data/media/0
+<user> ALL=(root) NOPASSWD: /usr/bin/waydroid
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data/media
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data/media/0
 EOF
 sudo chmod 440 /etc/sudoers.d/zz-iisu-bridge
 ```
 
-## 6. Install the bridge and the Helper
-
-Unzip this bundle and run the installer (first extract the stiimsu-helper folder into downloads, or in another directory then cd into that):
+Rewritten for fish shell (CachyOS etc.):
 
 ```bash
-cd ~/Downloads/stiimsu-helper
+echo "<user> ALL=(root) NOPASSWD: /usr/bin/waydroid  
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data  
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data/media  
+<user> ALL=(root) NOPASSWD: /usr/bin/chmod o+x /home/<user>/.local/share/waydroid/data/media/0" | sudo tee /etc/sudoers.d/zz-iisu-bridge > /dev/null
+
+sudo chmod 440 /etc/sudoers.d/zz-iisu-bridge
+```
+
+
+(REPLACE `<user>` with your linux user)
+
+## 5. Install the bridge and the Helper
+
+Unzip this bundle and run the installer (first extract the stiimsu-helper folder into a directory of your choice then cd into that):
+
+```bash
+cd ~/<directory>/stiimsu-helper
 chmod +x install.sh
 ./install.sh
 ```
+
+(REPLACE `<directory>` with your linux directory)
 
 This copies the app to `~/Documents/iisu-bridge/app/`, deploys the daemon to
 `~/Documents/iisu-bridge/iisu_bridge_daemon.py`, seeds
@@ -165,10 +199,12 @@ This copies the app to `~/Documents/iisu-bridge/app/`, deploys the daemon to
 future re-runs, never overwritten), and adds **Stiimsu Helper** to your app
 menu. Re-running `install.sh` is also how you update later.
 
-## 7. Create the daemon service
+## 6. Create the daemon service
 
 The daemon runs as a systemd *user* service, started on demand by the
-launcher (it does not auto-start at boot):
+launcher (it does not auto-start at boot)
+
+Bash (works on most normal setups) :
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -177,21 +213,39 @@ tee ~/.config/systemd/user/iisu-bridge.service > /dev/null << 'EOF'
 Description=iiSU bridge daemon (Waydroid frontend -> native SteamOS emulators)
 
 [Service]
-ExecStart=/usr/bin/python3 /home/deck/Documents/iisu-bridge/iisu_bridge_daemon.py
+ExecStart=/usr/bin/python3 /home/<user>/Documents/iisu-bridge/iisu_bridge_daemon.py
 Restart=on-failure
 EOF
 systemctl --user daemon-reload
 ```
 
-## 8. Launch iiSU
+Rewritten for fish shell(CachyOS etc.):
+
+```bash
+mkdir -p ~/.config/systemd/user  
+echo "[Unit]  
+Description=iiSU bridge daemon (Waydroid frontend -> native SteamOS emulators)
+
+[Service]  
+ExecStart=/usr/bin/python3 /home/<user>/Documents/iisu-bridge/iisu_bridge_daemon.py  
+Restart=on-failure" | sudo tee ~/.config/systemd/user/iisu-bridge.service > /dev/null
+
+systemctl --user daemon-reload
+
+```
+
+(REPLACE `<user>` with your linux user)
+
+## 7. Launch iiSU
 
 iiSU helper and iiSU for steam OS should have appeared under Games in the desktop menu. You can add a shortcut to desktop if it is missing.
 
-For Gaming Mode: in Steam (Desktop Mode) → Games → Add a Non-Steam Game
-to My Library → pick iiSU Frontend. You can also add custom artwork to the steam shortcut via
-the custom artwork folder.
+In the Steam desktop app → Games → Add a Non-Steam Game
+to My Library → pick iiSU Frontend. 
 
-## 9. Install your emulators
+You can also add custom artwork to the steam shortcut via the custom artwork folder.
+
+## 8. Install your emulators
 
 The bridge launches whatever you have; it doesn't ship emulators.
 
@@ -223,7 +277,7 @@ Two Windows-only emulators need a `wine`/Proton wrapper you configure
 yourself via Custom command: **Xenia** (Xbox 360) and **BigPEmu** (Jaguar —
 or use the RetroArch VirtualJaguar default instead), I won't go over the exact details here.
 
-## 10. Using Stiimsu Helper
+## 9. Using Stiimsu Helper
 
 Launch **Stiimsu Helper** from the app menu (Waydroid should be running when
 installing stubs). It opens in your browser, quits itself when you close the
@@ -242,6 +296,23 @@ picks it up with no restart) and the stub APK installs into Waydroid.
 
 **Add a game.** Pick the console, Browse to your ROM/ISO, click Add. The file
 is copied into the library and made readable. **PS3 is special** — see below.
+
+**Importing all your already existing roms**
+
+If you have a folder already containing roms, structured correctly
+
+*structure.png*
+
+
+You can import your entire collection into iisu by binding the folders.
+This does not add extra storage.
+Binding as similar to symlinks in the sense that it routes to the destination
+
+```bash
+sudo mount --bind ~/.local/share/waydroid/data/media/0/ /<filepath>
+```
+(REPLACE <filepath> with your filepath)
+(if you have spaces in your file path, add brackets, like this "/<filepath>")
 
 **Manage library.** Lists everything in the roms tree with sizes (PS3
 marker+folder pairs shown as one game) and deletes cleanly, including the
@@ -273,7 +344,7 @@ chmod +x ~/Downloads/stiimsu-helper/tools/ps3dec
 Then add the `decrypted.iso` through the Helper. Also the first time — RPCS3
 needs its firmware installed (`PS3UPDAT.PUP` via File → Install Firmware).
 
-## 11. Configure iiSU and play
+## 10. Configure iiSU and play
 
 Inside iiSU, for each console: add the library folder, point its folder
 picker at `roms/<console>` under internal storage and assign the emulator
@@ -283,19 +354,36 @@ launches the stub, the stub calls the daemon, your native emulator opens over
 Waydroid, and iiSU quietly closes during play and returns when you exit the
 game.
 
-## 12. Updating
+## 10.5 POTENTIAL ISSUE: Socket timeout
+
+If instead of launching a suitable emulator, you encounter the Socket timeout error
+
+open up the python sctipt located at
+
+```bash
+~/Documents/iisu-bridge/iisu_bridge_daemon.py
+```
+
+and change the bind address to "0.0.0.0" (meaning "this host on this network")
+
+```bash
+BIND_ADDR = "0.0.0.0"
+```
+
+## 11. Updating
 
 Download the new bundle, then:
 
 ```bash
 pkill -f stiimsu_helper
-cd ~/Downloads && rm -rf stiimsu-helper && unzip stiimsu-helper.zip
+cd ~/<directory> && rm -rf stiimsu-helper && unzip stiimsu-helper.zip
 cd stiimsu-helper && ./install.sh
 ```
+(REPLACE <directory> with your linux directory)
 
-## 13. Troubleshooting
+## 12. Troubleshooting
 
-To see logs for any errors that could appear: `journalctl --user -u iisu-bridge -f`
+To see debugging logs for any errors that could appear: `journalctl --user -u iisu-bridge -f`
 
 Common issues:
 
@@ -323,7 +411,7 @@ AppImage). The core picker and checkmark line in the Helper resolve both.
 *iiSU shows a stale error from a previous attempt* — iiSU sometimes redisplays
 the last emulator error; check the journal timestamps
 
-## 14. Security note
+## 13. Security note
 
 All stubs, the daemon, and the launcher share one bridge token, baked in at
 build time. The daemon only listens on the Waydroid-internal interface
